@@ -1,0 +1,63 @@
+{
+  "name": "react-webrtc-viewer",
+  "version": "1.0.0",
+  "description": "A React component for WebRTC streaming with WHEP protocol support, featuring zoom/pan functionality and customizable UI",
+  "main": "dist/index.js",
+  "module": "dist/index.esm.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.esm.js",
+      "require": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "type": "module",
+  "scripts": {
+    "build": "rollup -c",
+    "build:node": "node build.js",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "react",
+    "webrtc",
+    "whep",
+    "streaming",
+    "video",
+    "viewer",
+    "live-streaming",
+    "zoom",
+    "pan",
+    "interactive"
+  ],
+  "author": "",
+  "license": "MIT",
+  "peerDependencies": {
+    "react": ">=16.8.0",
+    "react-dom": ">=16.8.0"
+  },
+  "dependencies": {
+    "video.js": "^8.12.0",
+    "whip-whep": "github:medooze/whip-whep-js"
+  },
+  "devDependencies": {
+    "@babel/core": "^7.22.0",
+    "@babel/plugin-transform-runtime": "^7.22.0",
+    "@babel/preset-env": "^7.22.0",
+    "@babel/preset-react": "^7.22.0",
+    "@babel/runtime": "^7.22.0",
+    "@rollup/plugin-babel": "^6.0.0",
+    "@rollup/plugin-commonjs": "^25.0.0",
+    "@rollup/plugin-node-resolve": "^15.0.0",
+    "@rollup/plugin-terser": "^0.4.0",
+    "@types/react": "^18.0.0",
+    "@types/react-dom": "^18.0.0",
+    "@types/video.js": "^7.3.0",
+    "rollup": "^3.21.0",
+    "rollup-plugin-peer-deps-external": "^2.2.4"
+  }
+}
