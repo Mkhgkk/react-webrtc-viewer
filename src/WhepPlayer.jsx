@@ -361,6 +361,7 @@ const WebRTCViewer = ({
   options = {},
   className = "",
   style = {},
+  objectFit = "contain",
   onReady,
   onError,
   onStreamNotFound,
@@ -530,11 +531,11 @@ const WebRTCViewer = ({
       const defaultOptions = {
         muted: true,
         controls: true,
-        fluid: true,
         responsive: true,
         width: "100%",
         height: "100%",
         ...options,
+        fluid: false,
       };
 
       const player = videojs(videoElement, defaultOptions);
@@ -673,8 +674,8 @@ const WebRTCViewer = ({
       ref={containerRef}
       className={`whep-player-container ${className}`}
       style={{
-        position: "relative",
         overflow: "hidden",
+        display: "flex",
         userSelect: enableZoomPan ? "none" : "auto",
         ...style,
       }}
@@ -697,15 +698,15 @@ const WebRTCViewer = ({
       <div
         data-vjs-player
         style={{
-          width: "300px",
-          height: "200px",
+          width: "100%",
+          height: "100%",
+          position: "relative",
           transform: `translate(${panX}px, ${panY}px) scale(${zoom})`,
           transformOrigin: "0 0",
           transition:
             enableZoomPan && !isDraggingRef.current
               ? "transform 0.15s ease-out"
               : "none",
-          border: "1px solid blue",
         }}
       >
         <video
@@ -713,11 +714,12 @@ const WebRTCViewer = ({
           className="video-js vjs-default-skin"
           playsInline
           style={{
-            width: "300px",
-            height: "200px",
-            // border: "1px solid yellow",
+            position: "absolute",
             top: 0,
             left: 0,
+            width: "100%",
+            height: "100%",
+            objectFit,
           }}
           key={`video-${url}`}
         />
