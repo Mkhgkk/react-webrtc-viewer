@@ -145,7 +145,7 @@ class MillicastWhepPlugin extends Plugin {
       this.vid.pause();
     };
 
-    videojs.log("Before WHEP connection");
+    // videojs.log("Before WHEP connection");
     this.millicastView();
 
     if (player.videoJsResolutionSwitcher) {
@@ -224,7 +224,7 @@ class MillicastWhepPlugin extends Plugin {
     }
 
     const state = this.pc.iceConnectionState;
-    console.log("ICE connection state:", state);
+    // console.log("ICE connection state:", state);
 
     if (state === "disconnected" || state === "failed") {
       if (this.player) {
@@ -235,11 +235,11 @@ class MillicastWhepPlugin extends Plugin {
   };
 
   onTrack = (evt) => {
-    console.log("Track received:", evt.track.kind);
+    // console.log("Track received:", evt.track.kind);
     if (evt.streams && evt.streams[0]) {
-      console.log("Setting video srcObject:", evt.streams[0]);
+      // console.log("Setting video srcObject:", evt.streams[0]);
       this.vid.srcObject = evt.streams[0];
-      console.log("Video element srcObject set:", this.vid.srcObject);
+      // console.log("Video element srcObject set:", this.vid.srcObject);
     }
   };
 
@@ -260,23 +260,23 @@ class MillicastWhepPlugin extends Plugin {
 
       await this.whep.view(this.pc, this.url);
 
-      console.log("WHEP connection successful");
+      // console.log("WHEP connection successful");
       this.modal.close();
 
       if (this.player) {
         if (this.wasConnected) {
-          console.log("Reconnection - triggering whep:recovered");
+          // console.log("Reconnection - triggering whep:recovered");
           this.player.trigger("whep:recovered");
         } else {
           this.wasConnected = true;
-          console.log("First connection - triggering whep:connected");
+          // console.log("First connection - triggering whep:connected");
           this.player.trigger("whep:connected");
         }
 
-        console.log("Attempting to play video...");
+        // console.log("Attempting to play video...");
         try {
           await this.player.play();
-          console.log("Video play() successful");
+          // console.log("Video play() successful");
         } catch (e) {
           console.log("Video play() failed:", e);
         }
