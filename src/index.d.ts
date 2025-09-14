@@ -57,6 +57,8 @@ export interface WebRTCViewerProps {
   };
   /** Object fit for the video */
   objectFit?: "contain" | "cover" | "fill" | "none" | "scale-down";
+  /** Style for the container */
+  style?: React.CSSProperties;
 }
 
 export interface DefaultLoadingSpinnerProps {
