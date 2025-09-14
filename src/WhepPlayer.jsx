@@ -507,6 +507,7 @@ const WebRTCViewer = ({
     };
   }, [enableZoomPan, zoom, panX, panY]);
 
+  // Initialize Video.js player only when URL changes
   useEffect(() => {
     if (!url) {
       setError(getMessage("whepUrlRequired"));
@@ -634,9 +635,92 @@ const WebRTCViewer = ({
         delete videoElement.player;
       }
     };
+  }, [url]); // Only depend on URL - this is the only prop that should recreate the player
+
+  // Handle options changes without recreating the player
+  useEffect(() => {
+    if (playerRef.current && !playerRef.current.isDisposed()) {
+      // Update player options if needed
+      // Note: Video.js doesn't have a direct way to update options after initialization
+      // So we'll only recreate if critical options change
+    }
+  }, [options]);
+
+  // Handle callback changes without recreating the player
+  useEffect(() => {
+    if (!playerRef.current || playerRef.current.isDisposed()) return;
+
+    const player = playerRef.current;
+
+    // Remove existing listeners to avoid duplicates
+    player.off("error");
+    player.off("whep:notfound");
+    player.off("whep:recovered");
+    player.off("whep:connected");
+    player.off("whep:forbidden");
+    player.off("whep:servererror");
+    player.off("whep:error");
+    player.off("whep:disconnected");
+
+    // Re-add event listeners with current callbacks
+    player.on("error", () => {
+      const playerError = player.error();
+      const errorMessage = playerError
+        ? playerError.message
+        : getMessage("videoPlayerError");
+      setError(errorMessage);
+      onError?.(playerError);
+    });
+
+    player.on("whep:notfound", (event) => {
+      setError(null);
+      setIsReconnecting(true);
+      setIsLoading(false);
+      onStreamNotFound?.(event);
+    });
+
+    player.on("whep:recovered", (event) => {
+      setError(null);
+      setIsLoading(false);
+      setIsReconnecting(false);
+      onStreamRecovered?.(event);
+    });
+
+    player.on("whep:connected", (event) => {
+      setError(null);
+      setIsLoading(false);
+      setIsReconnecting(false);
+      onStreamConnected?.(event);
+    });
+
+    player.on("whep:forbidden", (event) => {
+      setError(getMessage("accessForbidden"));
+      setIsReconnecting(false);
+      setIsLoading(false);
+      onForbidden?.(event);
+    });
+
+    player.on("whep:servererror", (event) => {
+      setError(getMessage("serverError"));
+      setIsReconnecting(false);
+      setIsLoading(false);
+      onServerError?.(event);
+    });
+
+    player.on("whep:error", (event) => {
+      setError(null);
+      setIsReconnecting(true);
+      setIsLoading(false);
+      onError?.(event);
+    });
+
+    player.on("whep:disconnected", (event) => {
+      setError(null);
+      setIsReconnecting(true);
+      setIsLoading(false);
+      onStreamDisconnected?.(event);
+    });
   }, [
-    url,
-    options,
     onReady,
     onError,
     onStreamNotFound,
