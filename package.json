@@ -1,6 +1,6 @@
 {
   "name": "react-webrtc-viewer",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "description": "A React component for WebRTC streaming with WHEP protocol support, featuring zoom/pan functionality and customizable UI",
   "main": "dist/index.js",
   "module": "dist/index.esm.js",
