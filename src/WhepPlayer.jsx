@@ -178,17 +178,21 @@ class MillicastWhepPlugin extends Plugin {
     }
 
     console.log("WHEP connection error:", err);
-    this.player.pause();
+    if (this.player && typeof this.player.pause === 'function') {
+      this.player.pause();
+    }
 
     // Check if error is HTTP-related (404, etc.)
-    if (err.includes("404") || err.includes("Not Found")) {
-      this.player.trigger("whep:notfound", { error: err, url: this.url });
-    } else if (err.includes("403")) {
-      this.player.trigger("whep:forbidden", { error: err, url: this.url });
-    } else if (err.includes("500")) {
-      this.player.trigger("whep:servererror", { error: err, url: this.url });
-    } else {
-      this.player.trigger("whep:error", { error: err, url: this.url });
+    if (this.player) {
+      if (err.includes("404") || err.includes("Not Found")) {
+        this.player.trigger("whep:notfound", { error: err, url: this.url });
+      } else if (err.includes("403")) {
+        this.player.trigger("whep:forbidden", { error: err, url: this.url });
+      } else if (err.includes("500")) {
+        this.player.trigger("whep:servererror", { error: err, url: this.url });
+      } else {
+        this.player.trigger("whep:error", { error: err, url: this.url });
+      }
     }
 
     // Clean up connection
@@ -223,7 +227,9 @@ class MillicastWhepPlugin extends Plugin {
     console.log("ICE connection state:", state);
 
     if (state === "disconnected" || state === "failed") {
-      this.player.trigger("whep:disconnected", { state, url: this.url });
+      if (this.player) {
+        this.player.trigger("whep:disconnected", { state, url: this.url });
+      }
       this.onError("Connection lost");
     }
   };
@@ -257,21 +263,23 @@ class MillicastWhepPlugin extends Plugin {
       console.log("WHEP connection successful");
       this.modal.close();
 
-      if (this.wasConnected) {
-        console.log("Reconnection - triggering whep:recovered");
-        this.player.trigger("whep:recovered");
-      } else {
-        this.wasConnected = true;
-        console.log("First connection - triggering whep:connected");
-        this.player.trigger("whep:connected");
-      }
+      if (this.player) {
+        if (this.wasConnected) {
+          console.log("Reconnection - triggering whep:recovered");
+          this.player.trigger("whep:recovered");
+        } else {
+          this.wasConnected = true;
+          console.log("First connection - triggering whep:connected");
+          this.player.trigger("whep:connected");
+        }
 
-      console.log("Attempting to play video...");
-      try {
-        await this.player.play();
-        console.log("Video play() successful");
-      } catch (e) {
-        console.log("Video play() failed:", e);
+        console.log("Attempting to play video...");
+        try {
+          await this.player.play();
+          console.log("Video play() successful");
+        } catch (e) {
+          console.log("Video play() failed:", e);
+        }
       }
 
       try {
@@ -352,6 +360,7 @@ const WebRTCViewer = ({
   url,
   options = {},
   className = "",
+  style = {},
   onReady,
   onError,
   onStreamNotFound,
@@ -506,97 +515,121 @@ const WebRTCViewer = ({
     const videoElement = videoRef.current;
     if (!videoElement) return;
 
-    const defaultOptions = {
-      muted: true,
-      controls: true,
-      fluid: true,
-      responsive: true,
-      ...options,
+    // Prevent double initialization by checking if Video.js is already on this element
+    if (playerRef.current || videoElement.player) {
+      return;
+    }
+
+    // Wait for the element to be in the DOM
+    const initializePlayer = () => {
+      if (!document.contains(videoElement)) {
+        setTimeout(initializePlayer, 50);
+        return;
+      }
+
+      const defaultOptions = {
+        muted: true,
+        controls: true,
+        fluid: true,
+        responsive: true,
+        width: '100%',
+        height: '100%',
+        ...options,
+      };
+
+      const player = videojs(videoElement, defaultOptions);
+
+      player.ready(() => {
+        playerRef.current = player;
+        setIsLoading(false);
+
+        // Add custom spinner element
+        const spinnerEl = document.createElement("div");
+        spinnerEl.className = "vjs-custom-spinner";
+        player.el().appendChild(spinnerEl);
+
+        try {
+          player.MillicastWhepPlugin({ url });
+          onReady?.(player);
+        } catch (err) {
+          setError(err.message || getMessage("failedToInitialize"));
+          onError?.(err);
+        }
+      });
+
+      // Set up all the event listeners...
+      player.on("error", () => {
+        const playerError = player.error();
+        const errorMessage = playerError
+          ? playerError.message
+          : getMessage("videoPlayerError");
+        setError(errorMessage);
+        onError?.(playerError);
+      });
+
+      // Listen for WHEP-specific events
+      player.on("whep:notfound", (event) => {
+        setError(null);
+        setIsReconnecting(true);
+        setIsLoading(false);
+        onStreamNotFound?.(event);
+      });
+
+      player.on("whep:recovered", (event) => {
+        setError(null);
+        setIsLoading(false);
+        setIsReconnecting(false);
+        onStreamRecovered?.(event);
+      });
+
+      player.on("whep:connected", (event) => {
+        setError(null);
+        setIsLoading(false);
+        setIsReconnecting(false);
+        onStreamConnected?.(event);
+      });
+
+      player.on("whep:forbidden", (event) => {
+        setError(getMessage("accessForbidden"));
+        setIsReconnecting(false);
+        setIsLoading(false);
+        onForbidden?.(event);
+      });
+
+      player.on("whep:servererror", (event) => {
+        setError(getMessage("serverError"));
+        setIsReconnecting(false);
+        setIsLoading(false);
+        onServerError?.(event);
+      });
+
+      player.on("whep:error", (event) => {
+        setError(null);
+        setIsReconnecting(true);
+        setIsLoading(false);
+        onError?.(event);
+      });
+
+      player.on("whep:disconnected", (event) => {
+        setError(null);
+        setIsReconnecting(true);
+        setIsLoading(false);
+        onStreamDisconnected?.(event);
+      });
     };
 
-    const player = videojs(videoElement, defaultOptions);
-
-    player.ready(() => {
-      playerRef.current = player;
-      setIsLoading(false);
-
-      // Add custom spinner element
-      const spinnerEl = document.createElement("div");
-      spinnerEl.className = "vjs-custom-spinner";
-      player.el().appendChild(spinnerEl);
-
-      try {
-        player.MillicastWhepPlugin({ url });
-        onReady?.(player);
-      } catch (err) {
-        setError(err.message || getMessage("failedToInitialize"));
-        onError?.(err);
-      }
-    });
-
-    player.on("error", () => {
-      const playerError = player.error();
-      const errorMessage = playerError
-        ? playerError.message
-        : getMessage("videoPlayerError");
-      setError(errorMessage);
-      onError?.(playerError);
-    });
-
-    // Listen for WHEP-specific events
-    player.on("whep:notfound", (event) => {
-      setError(null);
-      setIsReconnecting(true);
-      setIsLoading(false);
-      onStreamNotFound?.(event);
-    });
-
-    player.on("whep:recovered", (event) => {
-      setError(null);
-      setIsLoading(false);
-      setIsReconnecting(false);
-      onStreamRecovered?.(event);
-    });
-
-    player.on("whep:connected", (event) => {
-      setError(null);
-      setIsLoading(false);
-      setIsReconnecting(false);
-      onStreamConnected?.(event);
-    });
-
-    player.on("whep:forbidden", (event) => {
-      setError(getMessage("accessForbidden"));
-      setIsReconnecting(false);
-      setIsLoading(false);
-      onForbidden?.(event);
-    });
-
-    player.on("whep:servererror", (event) => {
-      setError(getMessage("serverError"));
-      setIsReconnecting(false);
-      setIsLoading(false);
-      onServerError?.(event);
-    });
-
-    player.on("whep:error", (event) => {
-      setError(null);
-      setIsReconnecting(true);
-      setIsLoading(false);
-      onError?.(event);
-    });
-
-    player.on("whep:disconnected", (event) => {
-      setError(null);
-      setIsReconnecting(true);
-      setIsLoading(false);
-      onStreamDisconnected?.(event);
-    });
+    initializePlayer();
 
     return () => {
       if (playerRef.current && !playerRef.current.isDisposed()) {
         playerRef.current.dispose();
-        playerRef.current = null;
+      }
+      playerRef.current = null;
+      
+      // Also clear any Video.js reference on the element
+      const videoElement = videoRef.current;
+      if (videoElement && videoElement.player) {
+        delete videoElement.player;
       }
     };
   }, [
@@ -639,6 +672,7 @@ const WebRTCViewer = ({
         position: "relative",
         overflow: "hidden",
         userSelect: enableZoomPan ? "none" : "auto",
+        ...style,
       }}
     >
       {isLoading &&
@@ -659,6 +693,8 @@ const WebRTCViewer = ({
       <div
         data-vjs-player
         style={{
+          width: '100%',
+          height: '100%',
           transform: `translate(${panX}px, ${panY}px) scale(${zoom})`,
           transformOrigin: "0 0",
           transition:
@@ -671,6 +707,8 @@ const WebRTCViewer = ({
           ref={videoRef}
           className="video-js vjs-default-skin"
           playsInline
+          style={{ width: '100%', height: '100%' }}
+          key={`video-${url}`}
         />
       </div>
 

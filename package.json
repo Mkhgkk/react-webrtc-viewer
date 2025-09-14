@@ -20,7 +20,9 @@
   "scripts": {
     "build": "rollup -c && cp src/index.d.ts dist/index.d.ts",
     "build:node": "node build.js",
-    "prepublishOnly": "npm run build"
+    "prepublishOnly": "npm run build",
+    "dev": "cd example && npm run dev",
+    "dev:setup": "cd example && npm install"
   },
   "keywords": [
     "react",
