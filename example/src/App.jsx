@@ -4,7 +4,7 @@ import "./App.css";
 function App() {
   return (
     <WhepPlayer
-      url="http://192.168.0.67/live/stream1/whep"
+      url="http://example.com/live/stream/whep"
       enableZoomPan={true}
       maxZoom={5}
       onReady={() => console.log("Player ready")}

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import videojs from "video.js";
 import { WHEPClient } from "whip-whep/whep.js";
+import "./index.css";
 
 const Plugin = videojs.getPlugin("plugin");
 const ModalDialog = videojs.getComponent("ModalDialog");

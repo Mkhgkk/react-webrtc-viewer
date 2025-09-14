@@ -1,10 +1,10 @@
-import React from 'react';
+import React from "react";
 
 export interface WebRTCViewerProps {
   /** WHEP stream URL */
   url: string;
   /** Video.js player options */
-  options?: any;
+  options: any;
   /** Additional CSS class name */
   className?: string;
   /** Callback when player is ready */
@@ -32,7 +32,10 @@ export interface WebRTCViewerProps {
   /** Custom loading spinner component */
   renderLoading?: () => React.ReactNode;
   /** Custom error display component */
-  renderError?: (props: { error: string; onRetry: () => void }) => React.ReactNode;
+  renderError?: (props: {
+    error: string;
+    onRetry: () => void;
+  }) => React.ReactNode;
   /** Custom reconnecting display component */
   renderReconnecting?: () => React.ReactNode;
   /** Custom CSS for Video.js spinner styling */
@@ -52,6 +55,8 @@ export interface WebRTCViewerProps {
     videoPlayerError?: string;
     connectionLost?: string;
   };
+  /** Object fit for the video */
+  objectFit?: "contain" | "cover" | "fill" | "none" | "scale-down";
 }
 
 export interface DefaultLoadingSpinnerProps {
