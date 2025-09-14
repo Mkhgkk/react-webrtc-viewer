@@ -74,21 +74,21 @@ const getVjsSpinnerCSS = (customSpinnerCSS) => `
   }
 
   /* Custom user styles */
-  ${customSpinnerCSS || ''}
+  ${customSpinnerCSS || ""}
 `;
 
 // Function to inject or update spinner CSS
-const injectSpinnerCSS = (customSpinnerCSS = '') => {
+const injectSpinnerCSS = (customSpinnerCSS = "") => {
   if (typeof document === "undefined") return;
-  
+
   let style = document.getElementById("vjs-custom-spinner-css");
-  
+
   if (!style) {
     style = document.createElement("style");
     style.id = "vjs-custom-spinner-css";
     document.head.appendChild(style);
   }
-  
+
   style.textContent = getVjsSpinnerCSS(customSpinnerCSS);
 };
 
@@ -108,7 +108,7 @@ const defaultMessages = {
   whepUrlRequired: "WHEP URL is required",
   failedToInitialize: "Failed to initialize WHEP stream",
   videoPlayerError: "Video player error",
-  connectionLost: "Connection lost"
+  connectionLost: "Connection lost",
 };
 
 class MillicastWhepPlugin extends Plugin {
@@ -178,7 +178,7 @@ class MillicastWhepPlugin extends Plugin {
     }
 
     console.log("WHEP connection error:", err);
-    if (this.player && typeof this.player.pause === 'function') {
+    if (this.player && typeof this.player.pause === "function") {
       this.player.pause();
     }
 
@@ -391,7 +391,7 @@ const WebRTCViewer = ({
 
   // Merge default messages with user messages
   const finalMessages = { ...defaultMessages, ...messages };
-  
+
   // Helper function to get message
   const getMessage = (key) => finalMessages[key] || defaultMessages[key];
 
@@ -532,8 +532,8 @@ const WebRTCViewer = ({
         controls: true,
         fluid: true,
         responsive: true,
-        width: '100%',
-        height: '100%',
+        width: "100%",
+        height: "100%",
         ...options,
       };
 
@@ -625,7 +625,7 @@ const WebRTCViewer = ({
         playerRef.current.dispose();
       }
       playerRef.current = null;
-      
+
       // Also clear any Video.js reference on the element
       const videoElement = videoRef.current;
       if (videoElement && videoElement.player) {
@@ -659,7 +659,11 @@ const WebRTCViewer = ({
       renderError({ error, onRetry: handleRetry })
     ) : (
       <div className={`whep-player-error ${className}`}>
-        <DefaultErrorDisplay error={error} onRetry={handleRetry} messages={finalMessages} />
+        <DefaultErrorDisplay
+          error={error}
+          onRetry={handleRetry}
+          messages={finalMessages}
+        />
       </div>
     );
   }
@@ -693,21 +697,28 @@ const WebRTCViewer = ({
       <div
         data-vjs-player
         style={{
-          width: '100%',
-          height: '100%',
+          width: "300px",
+          height: "200px",
           transform: `translate(${panX}px, ${panY}px) scale(${zoom})`,
           transformOrigin: "0 0",
           transition:
             enableZoomPan && !isDraggingRef.current
               ? "transform 0.15s ease-out"
               : "none",
+          border: "1px solid blue",
         }}
       >
         <video
           ref={videoRef}
           className="video-js vjs-default-skin"
           playsInline
-          style={{ width: '100%', height: '100%' }}
+          style={{
+            width: "300px",
+            height: "200px",
+            // border: "1px solid yellow",
+            top: 0,
+            left: 0,
+          }}
           key={`video-${url}`}
         />
       </div>
@@ -772,7 +783,7 @@ export const DefaultLoadingSpinner = ({ message = "Loading stream..." }) => (
 export const DefaultErrorDisplay = ({ error, onRetry, messages = {} }) => {
   const finalMessages = { ...defaultMessages, ...messages };
   const getMessage = (key) => finalMessages[key] || defaultMessages[key];
-  
+
   return (
     <div
       style={{
