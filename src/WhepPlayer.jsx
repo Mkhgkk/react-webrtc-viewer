@@ -460,9 +460,6 @@ const WebRTCViewer = ({
       startPanX = panX;
       startPanY = panY;
       container.style.cursor = "grabbing";
-
-      // Reset transform origin to 0,0 for smooth panning
-      setTransformOrigin("0 0");
     };
 
     const handleMouseMove = (e) => {
@@ -474,7 +471,9 @@ const WebRTCViewer = ({
       const newPanY = startPanY + deltaY;
 
       if (videoContainer) {
+        // Apply transform directly without changing transform origin
         videoContainer.style.transform = `translate(${newPanX}px, ${newPanY}px) scale(${zoom})`;
+        videoContainer.style.transformOrigin = transformOrigin;
         videoContainer.style.transition = "none";
       }
     };
