@@ -390,6 +390,7 @@ const WebRTCViewer = ({
   const [zoom, setZoom] = useState(1);
   const [panX, setPanX] = useState(0);
   const [panY, setPanY] = useState(0);
+  const [transformOrigin, setTransformOrigin] = useState("0 0");
 
   // Merge default messages with user messages
   const finalMessages = { ...defaultMessages, ...messages };
@@ -424,14 +425,11 @@ const WebRTCViewer = ({
           setZoom(1);
           setPanX(0);
           setPanY(0);
+          setTransformOrigin("0 0");
         } else {
-          const zoomRatio = newZoom / zoom;
-          const newPanX = panX - (mouseX - panX) * (zoomRatio - 1);
-          const newPanY = panY - (mouseY - panY) * (zoomRatio - 1);
-
+          // Set transform origin to mouse position for zooming at cursor
+          setTransformOrigin(`${mouseX}px ${mouseY}px`);
           setZoom(newZoom);
-          setPanX(newPanX);
-          setPanY(newPanY);
         }
       }
     };
@@ -462,6 +460,9 @@ const WebRTCViewer = ({
       startPanX = panX;
       startPanY = panY;
       container.style.cursor = "grabbing";
+
+      // Reset transform origin to 0,0 for smooth panning
+      setTransformOrigin("0 0");
     };
 
     const handleMouseMove = (e) => {
@@ -787,7 +788,7 @@ const WebRTCViewer = ({
           height: "100%",
           position: "relative",
           transform: `translate(${panX}px, ${panY}px) scale(${zoom})`,
-          transformOrigin: "0 0",
+          transformOrigin: transformOrigin,
           transition:
             enableZoomPan && !isDraggingRef.current
               ? "transform 0.15s ease-out"
