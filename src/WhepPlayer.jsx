@@ -384,19 +384,178 @@ const WebRTCViewer = ({
   const playerRef = useRef(null);
   const containerRef = useRef(null);
   const isDraggingRef = useRef(false);
+  const lastTouchDistanceRef = useRef(0);
+  const panStartRef = useRef({ x: 0, y: 0 });
+  const zoomStartRef = useRef({ zoom: 1, centerX: 0, centerY: 0 });
+  const lastClickTimeRef = useRef(0);
+  const animationFrameRef = useRef(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
   const [isReconnecting, setIsReconnecting] = useState(false);
-  const [zoom, setZoom] = useState(1);
-  const [panX, setPanX] = useState(0);
-  const [panY, setPanY] = useState(0);
-  const [transformOrigin, setTransformOrigin] = useState("0 0");
+  const [transform, setTransform] = useState({
+    scale: 1,
+    translateX: 0,
+    translateY: 0
+  });
 
   // Merge default messages with user messages
   const finalMessages = { ...defaultMessages, ...messages };
 
   // Helper function to get message
   const getMessage = (key) => finalMessages[key] || defaultMessages[key];
+
+  // Get container dimensions
+  const getContainerDimensions = () => {
+    const container = containerRef.current;
+    if (!container) return { width: 0, height: 0 };
+
+    const rect = container.getBoundingClientRect();
+    return { width: rect.width, height: rect.height };
+  };
+
+  // Calculate boundaries for panning based on current scale
+  const calculatePanBoundaries = (scale = transform.scale) => {
+    if (scale <= 1) return { minX: 0, maxX: 0, minY: 0, maxY: 0 };
+
+    const { width, height } = getContainerDimensions();
+
+    // When scaled, content becomes larger than container
+    // Max translation is half the difference between scaled and container size
+    const scaledWidth = width * scale;
+    const scaledHeight = height * scale;
+
+    const maxX = (scaledWidth - width) / 2;
+    const maxY = (scaledHeight - height) / 2;
+
+    return {
+      minX: -maxX,
+      maxX: maxX,
+      minY: -maxY,
+      maxY: maxY
+    };
+  };
+
+  // Clamp translation values within boundaries
+  const clampTranslation = (translateX, translateY, scale = transform.scale) => {
+    const boundaries = calculatePanBoundaries(scale);
+    return {
+      translateX: Math.max(boundaries.minX, Math.min(boundaries.maxX, translateX)),
+      translateY: Math.max(boundaries.minY, Math.min(boundaries.maxY, translateY))
+    };
+  };
+
+  // Convert screen coordinates to video coordinates
+  const screenToVideo = (screenX, screenY) => {
+    const { width, height } = getContainerDimensions();
+    const { scale, translateX, translateY } = transform;
+
+    // Account for current transform when converting coordinates
+    const videoX = (screenX - translateX - width / 2) / scale + width / 2;
+    const videoY = (screenY - translateY - height / 2) / scale + height / 2;
+
+    return { x: videoX, y: videoY };
+  };
+
+  // Convert video coordinates to screen coordinates
+  const videoToScreen = (videoX, videoY) => {
+    const { width, height } = getContainerDimensions();
+    const { scale, translateX, translateY } = transform;
+
+    const screenX = (videoX - width / 2) * scale + width / 2 + translateX;
+    const screenY = (videoY - height / 2) * scale + height / 2 + translateY;
+
+    return { x: screenX, y: screenY };
+  };
+
+  // Apply zoom to a specific point, maintaining that point's position on screen
+  const zoomToPoint = (newScale, pointX, pointY, smooth = false) => {
+    const { width, height } = getContainerDimensions();
+
+    // Clamp the new scale
+    const clampedScale = Math.max(1, Math.min(maxZoom, newScale));
+
+    if (clampedScale === 1) {
+      // Reset to original position when fully zoomed out
+      setTransform({ scale: 1, translateX: 0, translateY: 0 });
+      return;
+    }
+
+    // Calculate the point in video coordinates that should stay fixed
+    const videoPoint = screenToVideo(pointX, pointY);
+
+    // Calculate where this point would be with the new scale
+    const newScreenPoint = {
+      x: (videoPoint.x - width / 2) * clampedScale + width / 2,
+      y: (videoPoint.y - height / 2) * clampedScale + height / 2
+    };
+
+    // Calculate the required translation to keep the point at the same screen position
+    const newTranslateX = pointX - newScreenPoint.x;
+    const newTranslateY = pointY - newScreenPoint.y;
+
+    // Apply boundaries
+    const clamped = clampTranslation(newTranslateX, newTranslateY, clampedScale);
+
+    setTransform({
+      scale: clampedScale,
+      translateX: clamped.translateX,
+      translateY: clamped.translateY
+    });
+  };
+
+  // Smooth zoom animation for double-click
+  const smoothZoomToPoint = (targetScale, pointX, pointY, duration = 300) => {
+    const startTime = performance.now();
+    const startTransform = { ...transform };
+    const { width, height } = getContainerDimensions();
+
+    // Calculate target transform
+    const clampedScale = Math.max(1, Math.min(maxZoom, targetScale));
+    let targetTransform;
+
+    if (clampedScale === 1) {
+      targetTransform = { scale: 1, translateX: 0, translateY: 0 };
+    } else {
+      const videoPoint = screenToVideo(pointX, pointY);
+      const newScreenPoint = {
+        x: (videoPoint.x - width / 2) * clampedScale + width / 2,
+        y: (videoPoint.y - height / 2) * clampedScale + height / 2
+      };
+      const newTranslateX = pointX - newScreenPoint.x;
+      const newTranslateY = pointY - newScreenPoint.y;
+      const clamped = clampTranslation(newTranslateX, newTranslateY, clampedScale);
+      targetTransform = {
+        scale: clampedScale,
+        translateX: clamped.translateX,
+        translateY: clamped.translateY
+      };
+    }
+
+    const animate = (currentTime) => {
+      const elapsed = currentTime - startTime;
+      const progress = Math.min(elapsed / duration, 1);
+
+      // Easing function (ease-out)
+      const easeOut = 1 - Math.pow(1 - progress, 3);
+
+      const currentTransform = {
+        scale: startTransform.scale + (targetTransform.scale - startTransform.scale) * easeOut,
+        translateX: startTransform.translateX + (targetTransform.translateX - startTransform.translateX) * easeOut,
+        translateY: startTransform.translateY + (targetTransform.translateY - startTransform.translateY) * easeOut
+      };
+
+      setTransform(currentTransform);
+
+      if (progress < 1) {
+        animationFrameRef.current = requestAnimationFrame(animate);
+      }
+    };
+
+    if (animationFrameRef.current) {
+      cancelAnimationFrame(animationFrameRef.current);
+    }
+    animationFrameRef.current = requestAnimationFrame(animate);
+  };
 
   // Inject custom spinner CSS
   useEffect(() => {
@@ -418,48 +577,57 @@ const WebRTCViewer = ({
       const mouseY = e.clientY - rect.top;
 
       const zoomFactor = e.deltaY > 0 ? 1 - zoomStep : 1 + zoomStep;
-      const newZoom = Math.max(1, Math.min(maxZoom, zoom * zoomFactor));
+      const newScale = transform.scale * zoomFactor;
 
-      if (newZoom !== zoom) {
-        if (newZoom === 1) {
-          setZoom(1);
-          setPanX(0);
-          setPanY(0);
-          setTransformOrigin("0 0");
-        } else {
-          // Set transform origin to mouse position for zooming at cursor
-          setTransformOrigin(`${mouseX}px ${mouseY}px`);
-          setZoom(newZoom);
-        }
-      }
+      zoomToPoint(newScale, mouseX, mouseY);
     };
 
     container.addEventListener("wheel", handleWheel, { passive: false });
     return () => container.removeEventListener("wheel", handleWheel);
-  }, [enableZoomPan, zoom, panX, panY, maxZoom, zoomStep]);
+  }, [enableZoomPan, transform.scale, maxZoom, zoomStep]);
 
-  // Handle drag to pan
+  // Handle mouse drag to pan
   useEffect(() => {
     if (!enableZoomPan) return;
 
     const container = containerRef.current;
-    if (!container || zoom <= 1) return;
+    if (!container) return;
 
-    const videoContainer = container.querySelector("[data-vjs-player]");
     let isDragging = false;
     let startX = 0;
     let startY = 0;
-    let startPanX = panX;
-    let startPanY = panY;
+    let startTransform = { ...transform };
 
     const handleMouseDown = (e) => {
+      // Handle double-click for zoom
+      const currentTime = Date.now();
+      const isDoubleClick = currentTime - lastClickTimeRef.current < 300;
+      lastClickTimeRef.current = currentTime;
+
+      if (isDoubleClick) {
+        const rect = container.getBoundingClientRect();
+        const clickX = e.clientX - rect.left;
+        const clickY = e.clientY - rect.top;
+
+        if (transform.scale === 1) {
+          // Zoom in to 2x
+          smoothZoomToPoint(2, clickX, clickY);
+        } else {
+          // Zoom out to 1x
+          smoothZoomToPoint(1, clickX, clickY);
+        }
+        return;
+      }
+
+      if (transform.scale <= 1) return;
+
       isDragging = true;
       isDraggingRef.current = true;
       startX = e.clientX;
       startY = e.clientY;
-      startPanX = panX;
-      startPanY = panY;
+      startTransform = { ...transform };
       container.style.cursor = "grabbing";
+      e.preventDefault();
     };
 
     const handleMouseMove = (e) => {
@@ -467,45 +635,161 @@ const WebRTCViewer = ({
 
       const deltaX = e.clientX - startX;
       const deltaY = e.clientY - startY;
-      const newPanX = startPanX + deltaX;
-      const newPanY = startPanY + deltaY;
 
-      if (videoContainer) {
-        // Apply transform directly without changing transform origin
-        videoContainer.style.transform = `translate(${newPanX}px, ${newPanY}px) scale(${zoom})`;
-        videoContainer.style.transformOrigin = transformOrigin;
-        videoContainer.style.transition = "none";
-      }
+      const newTranslateX = startTransform.translateX + deltaX;
+      const newTranslateY = startTransform.translateY + deltaY;
+
+      const clamped = clampTranslation(newTranslateX, newTranslateY, transform.scale);
+
+      setTransform({
+        scale: transform.scale,
+        translateX: clamped.translateX,
+        translateY: clamped.translateY
+      });
     };
 
-    const handleMouseUp = (e) => {
-      if (isDragging) {
-        const deltaX = e.clientX - startX;
-        const deltaY = e.clientY - startY;
-        const finalPanX = startPanX + deltaX;
-        const finalPanY = startPanY + deltaY;
-
-        setPanX(finalPanX);
-        setPanY(finalPanY);
-      }
-
+    const handleMouseUp = () => {
       isDragging = false;
       isDraggingRef.current = false;
-      container.style.cursor = zoom > 1 ? "grab" : "default";
+      container.style.cursor = transform.scale > 1 ? "grab" : "default";
     };
 
     container.addEventListener("mousedown", handleMouseDown);
     document.addEventListener("mousemove", handleMouseMove);
     document.addEventListener("mouseup", handleMouseUp);
 
-    container.style.cursor = zoom > 1 ? "grab" : "default";
+    container.style.cursor = transform.scale > 1 ? "grab" : "default";
 
     return () => {
       container.removeEventListener("mousedown", handleMouseDown);
       document.removeEventListener("mousemove", handleMouseMove);
       document.removeEventListener("mouseup", handleMouseUp);
     };
-  }, [enableZoomPan, zoom, panX, panY]);
+  }, [enableZoomPan, transform]);
+
+  // Handle touch gestures for mobile
+  useEffect(() => {
+    if (!enableZoomPan) return;
+
+    const container = containerRef.current;
+    if (!container) return;
+
+    let initialTouchDistance = 0;
+    let initialScale = 1;
+    let initialTransform = { translateX: 0, translateY: 0 };
+    let touchCenter = { x: 0, y: 0 };
+    let isPinching = false;
+    let isPanning = false;
+    let touchStartTransform = { ...transform };
+
+    const getTouchDistance = (touches) => {
+      if (touches.length < 2) return 0;
+      const dx = touches[0].clientX - touches[1].clientX;
+      const dy = touches[0].clientY - touches[1].clientY;
+      return Math.sqrt(dx * dx + dy * dy);
+    };
+
+    const getTouchCenter = (touches) => {
+      if (touches.length === 1) {
+        return { x: touches[0].clientX, y: touches[0].clientY };
+      }
+      if (touches.length >= 2) {
+        return {
+          x: (touches[0].clientX + touches[1].clientX) / 2,
+          y: (touches[0].clientY + touches[1].clientY) / 2
+        };
+      }
+      return { x: 0, y: 0 };
+    };
+
+    const handleTouchStart = (e) => {
+      e.preventDefault();
+
+      const touches = e.touches;
+      touchStartTransform = { ...transform };
+
+      if (touches.length === 1) {
+        // Single touch - prepare for panning
+        isPanning = transform.scale > 1;
+        touchCenter = getTouchCenter(touches);
+        panStartRef.current = {
+          x: touches[0].clientX,
+          y: touches[0].clientY
+        };
+      } else if (touches.length === 2) {
+        // Two fingers - prepare for pinch zoom
+        isPinching = true;
+        isPanning = false;
+        initialTouchDistance = getTouchDistance(touches);
+        initialScale = transform.scale;
+        initialTransform = { translateX: transform.translateX, translateY: transform.translateY };
+
+        const rect = container.getBoundingClientRect();
+        touchCenter = getTouchCenter(touches);
+        touchCenter.x -= rect.left;
+        touchCenter.y -= rect.top;
+      }
+    };
+
+    const handleTouchMove = (e) => {
+      e.preventDefault();
+
+      const touches = e.touches;
+
+      if (isPinching && touches.length === 2) {
+        // Handle pinch zoom
+        const currentDistance = getTouchDistance(touches);
+        const scale = initialScale * (currentDistance / initialTouchDistance);
+
+        const rect = container.getBoundingClientRect();
+        const currentCenter = getTouchCenter(touches);
+        currentCenter.x -= rect.left;
+        currentCenter.y -= rect.top;
+
+        zoomToPoint(scale, currentCenter.x, currentCenter.y);
+      } else if (isPanning && touches.length === 1 && transform.scale > 1) {
+        // Handle single-finger panning
+        const touch = touches[0];
+        const deltaX = touch.clientX - panStartRef.current.x;
+        const deltaY = touch.clientY - panStartRef.current.y;
+
+        const newTranslateX = touchStartTransform.translateX + deltaX;
+        const newTranslateY = touchStartTransform.translateY + deltaY;
+
+        const clamped = clampTranslation(newTranslateX, newTranslateY, transform.scale);
+
+        setTransform({
+          scale: transform.scale,
+          translateX: clamped.translateX,
+          translateY: clamped.translateY
+        });
+      }
+    };
+
+    const handleTouchEnd = (e) => {
+      isPinching = false;
+      isPanning = false;
+    };
+
+    container.addEventListener("touchstart", handleTouchStart, { passive: false });
+    container.addEventListener("touchmove", handleTouchMove, { passive: false });
+    container.addEventListener("touchend", handleTouchEnd, { passive: false });
+
+    return () => {
+      container.removeEventListener("touchstart", handleTouchStart);
+      container.removeEventListener("touchmove", handleTouchMove);
+      container.removeEventListener("touchend", handleTouchEnd);
+    };
+  }, [enableZoomPan, transform]);
+
+  // Cleanup animation frames on unmount
+  useEffect(() => {
+    return () => {
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current);
+      }
+    };
+  }, []);
 
   // Initialize Video.js player only when URL changes
   useEffect(() => {
@@ -786,11 +1070,11 @@ const WebRTCViewer = ({
           width: "100%",
           height: "100%",
           position: "relative",
-          transform: `translate(${panX}px, ${panY}px) scale(${zoom})`,
-          transformOrigin: transformOrigin,
+          transform: `translate(${transform.translateX}px, ${transform.translateY}px) scale(${transform.scale})`,
+          transformOrigin: "center center",
           transition:
             enableZoomPan && !isDraggingRef.current
-              ? "transform 0.15s ease-out"
+              ? "transform 0.15s cubic-bezier(0.25, 0.46, 0.45, 0.94)"
               : "none",
         }}
       >
@@ -811,7 +1095,7 @@ const WebRTCViewer = ({
       </div>
 
       {/* Zoom indicator */}
-      {enableZoomPan && zoom !== 1 && (
+      {enableZoomPan && transform.scale !== 1 && (
         <div
           style={{
             position: "absolute",
@@ -825,7 +1109,7 @@ const WebRTCViewer = ({
             zIndex: 20,
           }}
         >
-          {Math.round(zoom * 100)}%
+          {Math.round(transform.scale * 100)}%
         </div>
       )}
     </div>
